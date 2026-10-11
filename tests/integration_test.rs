@@ -113,6 +113,39 @@ fn backend() {
     }
 }
 #[test]
+fn symbolic_atoms_lookup() {
+    let mut ctl = control(vec![]).unwrap();
+    ctl.add("base", &[], "a(1). {b}.").unwrap();
+    let part = Part::new("base", vec![]).unwrap();
+    ctl.ground(&[part]).unwrap();
+
+    let sa = ctl.symbolic_atoms().unwrap();
+    let one = Symbol::create_number(1);
+    let a1 = Symbol::create_function("a", &[one], true).unwrap();
+    let atom = sa.lookup(a1).unwrap().expect("a(1) is in the grounding");
+    assert_eq!(atom.symbol().unwrap(), a1);
+    assert!(atom.is_fact().unwrap());
+
+    let b = Symbol::create_id("b", true).unwrap();
+    let atom = sa.lookup(b).unwrap().expect("b is in the grounding");
+    assert!(!atom.is_fact().unwrap());
+
+    let c = Symbol::create_id("c", true).unwrap();
+    assert!(sa.lookup(c).unwrap().is_none());
+}
+#[test]
+fn control_as_raw() {
+    let mut ctl = control(vec![]).unwrap();
+    let raw = ctl.as_raw();
+    assert!(!raw.is_null());
+    assert_eq!(ctl.as_raw(), raw);
+    // The control stays usable: as_raw neither consumes nor frees it.
+    ctl.add("base", &[], "a.").unwrap();
+    let part = Part::new("base", vec![]).unwrap();
+    ctl.ground(&[part]).unwrap();
+    assert_eq!(ctl.as_raw(), raw);
+}
+#[test]
 fn symbols() {
     let number_symbol = Symbol::create_number(42);
     let identifier_symbol = Symbol::create_id("x", true).unwrap();

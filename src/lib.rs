@@ -1726,6 +1726,15 @@ impl<C: ControlCtx> Drop for GenericControl<C> {
     }
 }
 impl<C: ControlCtx> GenericControl<C> {
+    /// The raw `clingo_control_t` pointer, still owned by `self`.
+    ///
+    /// For C extensions such as clingo-lpx that register themselves on the raw control.
+    /// Unlike `From<GenericControl> for NonNull<clingo_control_t>`, this does not consume the
+    /// control: the pointer is valid only while `self` is alive.
+    pub fn as_raw(&self) -> *mut clingo_control_t {
+        self.ctl.as_ptr()
+    }
+
     /// Ground the selected parts [`Part`] of the current (non-ground) logic
     /// program.
     ///
@@ -3478,7 +3487,27 @@ impl SymbolicAtoms {
         Ok(signatures)
     }
 
-    // NODO: fn clingo_symbolic_atoms_is_valid()
+    /// Find the symbolic atom for `symbol`, or `None` when it does not occur in the grounding.
+    ///
+    /// Wraps `clingo_symbolic_atoms_find` and `clingo_symbolic_atoms_is_valid`.
+    pub fn lookup(&self, symbol: Symbol) -> Result<Option<SymbolicAtom<'_>>, ClingoError> {
+        let mut cur = 0;
+        if !unsafe { clingo_symbolic_atoms_find(&self.0, symbol.0, &mut cur) } {
+            return Err(ClingoError::new_internal(
+                "Call to clingo_symbolic_atoms_find() failed",
+            ));
+        }
+        let mut valid = false;
+        if !unsafe { clingo_symbolic_atoms_is_valid(&self.0, cur, &mut valid) } {
+            return Err(ClingoError::new_internal(
+                "Call to clingo_symbolic_atoms_is_valid() failed",
+            ));
+        }
+        Ok(valid.then_some(SymbolicAtom {
+            cur,
+            atoms: &self.0,
+        }))
+    }
 }
 /// An iterator over symbolic atoms.
 pub struct SymbolicAtomsIterator<'a> {
